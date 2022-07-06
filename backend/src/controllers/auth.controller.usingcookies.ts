@@ -1,9 +1,8 @@
 import { Request, Response } from "express";
-import { getRepository, MoreThanOrEqual } from "typeorm";
+import { getRepository } from "typeorm";
 import { User } from "../models/user.model";
 import bcryptjs from "bcryptjs";
 import { sign, verify} from "jsonwebtoken";
-import { Token } from "../models/token.entity";
 
 interface IUser {
   first_name: string,
@@ -64,51 +63,46 @@ class AuthController {
       id: user.id
     };
 
+    const accessToken = sign(payload, access_secret, { expiresIn: "30s" });
     const refreshToken = sign(payload, refresh_secret, { expiresIn: "1w" });
+
+    res.cookie("access_token", accessToken, {
+      httpOnly: true,
+      maxAge: 24 * 60 * 60 * 1000 // 1 day
+    });
 
     res.cookie("refresh_token", refreshToken, {
       httpOnly: true,
       maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-    });
 
-    const expired_at = new Date();
-
-    expired_at.setDate(expired_at.getDate() + 7);
-
-    await getRepository(Token).save({
-      user_id: user.id,
-      token: refreshToken,
-      expired_at
     })
 
-    const token = sign(payload, access_secret, { expiresIn: "30s" });
-
-    res.status(200).send({ token });
+    res.status(200).send({ message: "Success" });
   }
 
   async AuthenticatedUser(req: Request, res: Response) {
 
     try {
-      const accessToken = req.header("Authorization")?.split(" ")[1] || '';
+      const accessToken = req.cookies["access_token"];
 
-      const payload :any = verify(accessToken, access_secret);
+    const payload :any = verify(accessToken, access_secret);
 
-      if (!payload) {
-        return res.status(401).send({
-          message: "unauthenticated"
-        });
-      }
+    if (!payload) {
+      return res.status(401).send({
+        message: "unauthenticated"
+      });
+    }
 
-      const user :any = await getRepository(User).findOne(payload.id);
-      if (!user) {
-        return res.status(401).send({
-          message: "unauthenticated"
-        });
-      }
-        
-      const {password, ...data} = user
-        
-      res.send(data);
+    const user :any = await getRepository(User).findOne(payload.id);
+    if (!user) {
+      return res.status(401).send({
+        message: "unauthenticated"
+      });
+    }
+      
+    const {password, ...data} = user
+      
+    res.send(data);
 
     } catch (error) {
       return res.status(401).send({
@@ -119,22 +113,11 @@ class AuthController {
 
   async Refresh(req: Request, res: Response) {
     try {
-      const cookie = req.cookies["refresh_token"];
+      const refreshToken = req.cookies["refresh_token"];
 
-      const payload: any = verify(cookie, refresh_secret);
+      const payload: any = verify(refreshToken, refresh_secret);
 
       if (!payload) {
-        return res.status(401).send({
-          message: "unauthenticated"
-        });
-      }
-
-      const refreshToken = await getRepository(Token).findOne({
-        user_id: payload.user_id,
-        expired_at: MoreThanOrEqual(new Date())
-      })
-
-      if (!refreshToken) {
         return res.status(401).send({
           message: "unauthenticated"
         });
@@ -147,10 +130,14 @@ class AuthController {
         });
       }
 
-      const token = sign({id: payload.id}, access_secret, { expiresIn: "30s" });
+      const accessToken = sign({id: payload.id}, access_secret, { expiresIn: "30s" });
 
-      res.status(200).send({ token });
+      res.cookie("access_token", accessToken, {
+        httpOnly: true,
+        maxAge: 24 * 60 * 60 * 1000 // 1 day
+      });
 
+      res.status(200).send({ message: "Success" });
     } catch (error) {
       return res.status(401).send({
         message: "unauthenticated"
@@ -160,11 +147,7 @@ class AuthController {
   }
 
   async Logout(req: Request, res: Response) {
-
-    await getRepository(Token).delete({
-      token: req.cookies["refresh_token"]
-    });
-
+    res.cookie("access_token", "", { maxAge: 0 });
     res.cookie("refresh_token", "", { maxAge: 0 });
 
     res.status(200).send({ message: "Success" });

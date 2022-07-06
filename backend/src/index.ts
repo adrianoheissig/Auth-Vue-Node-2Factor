@@ -1,26 +1,28 @@
 require("dotenv").config();
 
-import express, { Request, Response } from "express";
+import express from "express";
 
 import { createConnection } from "typeorm";
 import { router } from "./routes";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 
-createConnection().then(() => {
-  const app = express();
-  
-  //Toda vez que enviar um request, será convertido para JSON
-  app.use(express.json());
+ createConnection().then(() => {
+    const app = express();
 
-  app.use(cookieParser());
+    //Toda vez que enviar um request, será convertido para JSON
+    app.use(express.json());
 
-  app.use(cors({
-    origin: ["http://localhost:8080", "http://localhost:8081"],
-    credentials: true
-  }))
+    app.use(cookieParser());
 
-  app.use(router)
-  
-  app.listen(3333, () => { console.log("Listen on port 3333") });
-})
+    app.use(cors({
+      origin: ["http://localhost:8080", "http://localhost:8082"],
+      credentials: true
+    }))
+
+    app.use(router)
+
+    app.listen(3333, () => { console.log("Listen on port 3333") });
+
+ })
+
